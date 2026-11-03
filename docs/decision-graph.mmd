@@ -1,0 +1,25 @@
+flowchart TD
+    __start__(["start"])
+    load_state["load_state"]
+    entry_guardrail["entry_guardrail"]
+    propose_actions["propose_actions"]
+    guardrail_filter["guardrail_filter"]
+    no_candidates["no_candidates"]
+    master_select["master_select"]
+    compose_message["compose_message"]
+    dispatch["dispatch"]
+    finalize["finalize"]
+    __start__ --> load_state
+    load_state -->|"journey is not active"| finalize
+    load_state -->|"journey is active"| entry_guardrail
+    entry_guardrail -->|"suppressed at entry"| no_candidates
+    entry_guardrail -->|"entry rule passed"| propose_actions
+    propose_actions --> guardrail_filter
+    guardrail_filter -->|"no legal candidates"| no_candidates
+    guardrail_filter -->|"has legal candidates"| master_select
+    no_candidates --> finalize
+    master_select -->|"wait chosen (holdout or Master picked wait)"| finalize
+    master_select -->|"a send was chosen"| compose_message
+    compose_message -->|"no message could be built: wait"| finalize
+    compose_message -->|"message built"| dispatch
+    dispatch --> finalize

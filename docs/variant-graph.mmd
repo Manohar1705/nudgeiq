@@ -1,0 +1,17 @@
+flowchart TD
+    __start__(["start"])
+    prepare["prepare"]
+    draft_variants["draft_variants"]
+    check_drafts["check_drafts"]
+    save_pending["save_pending"]
+    await_review["await_review"]
+    apply_review["apply_review"]
+    finish["finish"]
+    __start__ --> prepare
+    prepare --> draft_variants
+    draft_variants --> check_drafts
+    check_drafts -->|"no draft passed the checks"| finish
+    check_drafts -->|"some drafts passed"| save_pending
+    save_pending --> await_review
+    await_review -->|"a person has decided"| apply_review
+    apply_review --> finish

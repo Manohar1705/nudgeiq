@@ -1,0 +1,109 @@
+{
+  "templates": [
+    {
+      "template_id": "t_push_still_there",
+      "name": "Same-session 'still there?'",
+      "channel": "push",
+      "body": "Hey {{name}}, your cart is still holding your {{topItem}}. Tap to check out in under a minute: {{link}}"
+    },
+    {
+      "template_id": "t_email_bonus",
+      "name": "Loyalty bonus points",
+      "channel": "email",
+      "body": "Subject: Come back for bonus points on your cart\n\nHi {{name}}, finish your ${{aov}} order in the next 24 hours and we will add {{bonusPts}} points on top of your usual earn. {{link}}",
+      "offers": [
+        "bonus_points"
+      ]
+    },
+    {
+      "template_id": "t_sms_low_stock",
+      "name": "Low-stock urgency",
+      "channel": "sms",
+      "body": "Only {{units}} left of your {{topItem}} at {{store}}. Reserve it: {{link}} Reply STOP to opt out."
+    },
+    {
+      "template_id": "t_email_discount",
+      "name": "Cart saved, offer at checkout",
+      "channel": "email",
+      "offers": [
+        "free_shipping",
+        "percent_off"
+      ],
+      "body": "Subject: Your cart is waiting\n\nHi {{name}}, your {{topItem}} and the rest of your ${{aov}} cart are saved. {{link}}"
+    }
+  ],
+  "variants": [
+    {
+      "variant_id": "v_push_warm",
+      "template_id": "t_push_still_there",
+      "principle": "commitment",
+      "tone": "warm",
+      "status": "approved",
+      "text": "Hi {{name}}, you picked the {{topItem}} for a reason. It is still in your cart, and checkout takes under a minute: {{link}}"
+    },
+    {
+      "variant_id": "v_push_social",
+      "template_id": "t_push_still_there",
+      "principle": "social_proof",
+      "tone": "motivational",
+      "status": "approved",
+      "text": "Many shoppers chose the {{topItem}} this week, {{name}}. Yours is waiting in your cart: {{link}}"
+    },
+    {
+      "variant_id": "v_push_authority",
+      "template_id": "t_push_still_there",
+      "principle": "authority",
+      "tone": "authoritative",
+      "status": "pending",
+      "text": "Recommended for you, {{name}}: finish your {{topItem}} order here: {{link}}"
+    },
+    {
+      "variant_id": "v_push_rejected",
+      "template_id": "t_push_still_there",
+      "principle": "present_bias",
+      "tone": "urgent",
+      "status": "rejected",
+      "text": "Last chance, {{name}}!!! {{topItem}} gone soon: {{link}}"
+    },
+    {
+      "variant_id": "v_email_warm",
+      "template_id": "t_email_bonus",
+      "principle": "reciprocity",
+      "tone": "warm",
+      "status": "approved",
+      "text": "Subject: A little extra for finishing your order\n\nHi {{name}}, complete your ${{aov}} order within 24 hours and we will add {{bonusPts}} bonus points. {{link}}"
+    },
+    {
+      "variant_id": "v_email_direct",
+      "template_id": "t_email_bonus",
+      "principle": "commitment",
+      "tone": "authoritative",
+      "status": "approved",
+      "text": "Subject: Your cart is ready\n\n{{name}}, your ${{aov}} cart is saved. Order today and earn {{bonusPts}} bonus points. {{link}}"
+    },
+    {
+      "variant_id": "v_sms_stock",
+      "template_id": "t_sms_low_stock",
+      "principle": "scarcity",
+      "tone": "urgent",
+      "status": "approved",
+      "text": "{{name}}, only {{units}} left of your {{topItem}} at {{store}}. Reserve it: {{link}} Reply STOP to opt out."
+    },
+    {
+      "variant_id": "v_sms_pending",
+      "template_id": "t_sms_low_stock",
+      "principle": "authority",
+      "tone": "authoritative",
+      "status": "pending",
+      "text": "Stock alert for {{topItem}} at {{store}}: {{link}} Reply STOP to opt out."
+    },
+    {
+      "variant_id": "v_email_cart_ready",
+      "template_id": "t_email_discount",
+      "principle": "commitment",
+      "tone": "warm",
+      "status": "approved",
+      "text": "Subject: Your cart is waiting\n\nHi {{name}}, your {{topItem}} and the rest of your ${{aov}} cart are saved, and your offer is applied at checkout. {{link}}"
+    }
+  ]
+}
