@@ -78,7 +78,11 @@ services:
     # No published port: only the backend and the worker need Redis.
 
   worker:
-    image: nudgeiq-backend
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     command:
       - celery
       - -A
@@ -86,17 +90,6 @@ services:
       - worker
       - --loglevel=${NUDGEIQ_LOG_LEVEL:-INFO}
       - --concurrency=${WORKER_CONCURRENCY:-2}
-    environment:
-      NUDGEIQ_REDIS_URL: redis://redis:6379/0
-      NUDGEIQ_DATABASE_URL: postgresql://nudgeiq:${POSTGRES_PASSWORD:-nudgeiq}@db:5432/nudgeiq
-      NUDGEIQ_LOG_LEVEL: ${NUDGEIQ_LOG_LEVEL:-INFO}
-      NUDGEIQ_SEND_MAX_LATE_MINUTES: ${NUDGEIQ_SEND_MAX_LATE_MINUTES:-120}
-      NUDGEIQ_OUTCOME_SWEEP_GRACE_SECONDS: ${NUDGEIQ_OUTCOME_SWEEP_GRACE_SECONDS:-600}
-    depends_on:
-      redis:
-        condition: service_healthy
-      backend:  # the backend creates the tables on start-up; the worker only uses them
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.worker.celery_app inspect ping -d celery@$$HOSTNAME -t 5"]
       interval: 15s
@@ -106,7 +99,9 @@ services:
     restart: unless-stopped
 
   beat:
-    image: nudgeiq-backend
+    depends_on:
+      redis:
+        condition: service_healthy
     command:
       - celery
       - -A
@@ -114,12 +109,6 @@ services:
       - beat
       - --loglevel=${NUDGEIQ_LOG_LEVEL:-INFO}
       - --schedule=/tmp/celerybeat-schedule
-    environment:
-      NUDGEIQ_REDIS_URL: redis://redis:6379/0
-      NUDGEIQ_DISPATCH_INTERVAL_SECONDS: ${NUDGEIQ_DISPATCH_INTERVAL_SECONDS:-30}
-    depends_on:
-      redis:
-        condition: service_healthy
     restart: unless-stopped
 
   frontend:

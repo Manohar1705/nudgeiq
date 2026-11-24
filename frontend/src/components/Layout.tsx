@@ -1,6 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { api } from "../api/client";
-import { useApi } from "../hooks/useApi";
+
 
 const TABS = [
   { to: "/configure", label: "Configure Agent" },
