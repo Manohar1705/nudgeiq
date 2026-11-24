@@ -6,10 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /srv
 
 # Dependencies first, so code changes do not reinstall them.
-COPY requirements.txt .
+COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app ./app
 
 # Run as a normal user, not root.
 RUN useradd --create-home --uid 10001 nudgeiq
