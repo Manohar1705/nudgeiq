@@ -1,0 +1,175 @@
+{
+  "use_case_id": "target_cart",
+  "trigger_event": "cart_abandoned",
+  "name": "Cart Recovery (sample, placeholder values)",
+  "cohorts": [
+    {
+      "cohort_id": "cart_high_aov",
+      "label": "Abandoned cart, high basket value",
+      "size": 400000
+    },
+    {
+      "cohort_id": "cart_low_aov",
+      "label": "Abandoned cart, low basket value",
+      "size": 900000
+    },
+    {
+      "cohort_id": "loyalty_members",
+      "label": "Loyalty members, abandoned",
+      "size": 150000
+    },
+    {
+      "cohort_id": "repeat_abandoners",
+      "label": "Repeat abandoners",
+      "size": 140000
+    }
+  ],
+  "context_signals": [
+    {
+      "signal_id": "cart",
+      "label": "Cart contents and value",
+      "enabled": true,
+      "fields": []
+    },
+    {
+      "signal_id": "dropoff_stage",
+      "label": "Checkout drop-off stage",
+      "enabled": true,
+      "fields": [
+        "dropoff_stage"
+      ]
+    },
+    {
+      "signal_id": "fulfillment",
+      "label": "Fulfillment method",
+      "enabled": true,
+      "fields": [
+        "fulfillment"
+      ]
+    },
+    {
+      "signal_id": "loyalty",
+      "label": "Loyalty status",
+      "enabled": true,
+      "fields": [
+        "loyalty_tier"
+      ]
+    },
+    {
+      "signal_id": "payment",
+      "label": "Payment method",
+      "enabled": true,
+      "fields": [
+        "card_holder"
+      ]
+    },
+    {
+      "signal_id": "store",
+      "label": "Home store and distance",
+      "enabled": true,
+      "fields": [
+        "home_store_distance_km"
+      ]
+    },
+    {
+      "signal_id": "device",
+      "label": "Session device and channel",
+      "enabled": false,
+      "fields": [
+        "device"
+      ]
+    },
+    {
+      "signal_id": "history",
+      "label": "12-month purchase history",
+      "enabled": false,
+      "fields": [
+        "purchases_12m"
+      ]
+    },
+    {
+      "signal_id": "pricing",
+      "label": "Price and promo signals",
+      "enabled": false,
+      "fields": [
+        "price_drop"
+      ]
+    },
+    {
+      "signal_id": "inventory",
+      "label": "Local inventory pressure",
+      "enabled": false,
+      "fields": [
+        "low_stock"
+      ]
+    }
+  ],
+  "action_space": {
+    "levers": [
+      "free_shipping",
+      "loyalty_bonus",
+      "card_pitch",
+      "switch_to_pickup"
+    ],
+    "channels": [
+      "push",
+      "email",
+      "sms"
+    ],
+    "offers": [
+      "free_shipping",
+      "bonus_points",
+      "percent_off"
+    ],
+    "timings": [
+      "T+1h",
+      "T+24h"
+    ],
+    "eligibility": {
+      "push": "has_app",
+      "sms": "sms_opt_in",
+      "email": "email_opt_in",
+      "bonus_points": "loyalty_member",
+      "loyalty_bonus": "loyalty_member",
+      "card_pitch": "card_holder",
+      "switch_to_pickup": "pickup_available"
+    }
+  },
+  "rewards": {
+    "points": {
+      "order_placed": 40,
+      "checkout_restarted": 18,
+      "cart_reopened": 12,
+      "app_opened": 8,
+      "cta_clicked": 5,
+      "message_opened": 2,
+      "refunded": -35,
+      "unsubscribed": -20,
+      "bought_elsewhere": -15,
+      "ignored": -10
+    }
+  },
+  "guardrails": {
+    "max_contacts_per_window": 4,
+    "window_days": 30,
+    "cooldown_hours": 48,
+    "allowed_start_hour": 9,
+    "allowed_end_hour": 21,
+    "allowed_weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "min_cart_value": 10,
+    "min_abandoned_minutes": 30,
+    "exit_after_days": 14
+  },
+  "learning": {
+    "epsilon": 0.1,
+    "holdout_fraction": 0.1
+  }
+}

@@ -1,0 +1,139 @@
+# Whole stack:   docker compose up --build
+#   UI:          http://localhost:8080
+#   API + docs:  http://localhost:8000/docs
+#   Check the worker:  docker compose exec worker python -m app.worker.check
+# Settings come from a .env file next to this one (copy .env.example). All have defaults.
+name: nudgeiq
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: nudgeiq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nudgeiq}
+      POSTGRES_DB: nudgeiq
+    volumes:
+      - nudgeiq_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nudgeiq -d nudgeiq"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    # No published port: only the backend needs the database.
+    # For psql from your computer, uncomment:
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+
+  backend:
+    build: ./backend
+    image: nudgeiq-backend  # the worker below uses this same image, so it is built once
+    environment:
+      NUDGEIQ_DATABASE_URL: postgresql://nudgeiq:${POSTGRES_PASSWORD:-nudgeiq}@db:5432/nudgeiq
+      NUDGEIQ_LLM: ${NUDGEIQ_LLM:-mock}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      NUDGEIQ_GROQ_MODEL: ${NUDGEIQ_GROQ_MODEL:-}
+      NUDGEIQ_GROQ_MODEL_2: ${NUDGEIQ_GROQ_MODEL_2:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      NUDGEIQ_GEMINI_MODEL: ${NUDGEIQ_GEMINI_MODEL:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      NUDGEIQ_OPENROUTER_MODEL: ${NUDGEIQ_OPENROUTER_MODEL:-}
+      NUDGEIQ_LLM_TIMEOUT: ${NUDGEIQ_LLM_TIMEOUT:-}
+      NUDGEIQ_LOG_LEVEL: ${NUDGEIQ_LOG_LEVEL:-INFO}
+      NUDGEIQ_ENGINE: ${NUDGEIQ_ENGINE:-classic}
+      # 1 = nudges are stored and delivered at their send time by the worker (8d-2).
+      # 0 = the old behaviour: "sent" immediately in the API's own log.
+      NUDGEIQ_SCHEDULED_SENDS: ${NUDGEIQ_SCHEDULED_SENDS:-1}
+      # 1 = POST /outcomes stores the outcome and answers 202; the worker rewards and learns (8d-3b).
+      # 0 (default) = the old behaviour: everything is done before the answer.
+      NUDGEIQ_ASYNC_OUTCOMES: ${NUDGEIQ_ASYNC_OUTCOMES:-0}
+      NUDGEIQ_REDIS_URL: redis://redis:6379/0  # only used when NUDGEIQ_ASYNC_OUTCOMES is 1
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  # ---- Background work (8d). The schedule of nudges lives in PostgreSQL (table scheduled_sends).
+  # `beat` wakes up every NUDGEIQ_DISPATCH_INTERVAL_SECONDS and asks the worker to deliver what is
+  # due. Redis only carries those wake-up calls, so the schedule survives losing Redis.
+  # Run exactly ONE beat. Outcome updates arrive in 8d-3.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]  # keep queued tasks across a restart
+    volumes:
+      - nudgeiq_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    # No published port: only the backend and the worker need Redis.
+
+  worker:
+    build: ./backend
+    image: nudgeiq-backend
+    command:
+      - celery
+      - -A
+      - app.worker.celery_app
+      - worker
+      - --loglevel=${NUDGEIQ_LOG_LEVEL:-INFO}
+      - --concurrency=${WORKER_CONCURRENCY:-2}
+    environment:
+      NUDGEIQ_REDIS_URL: redis://redis:6379/0
+      NUDGEIQ_DATABASE_URL: postgresql://nudgeiq:${POSTGRES_PASSWORD:-nudgeiq}@db:5432/nudgeiq
+      NUDGEIQ_LOG_LEVEL: ${NUDGEIQ_LOG_LEVEL:-INFO}
+      NUDGEIQ_SEND_MAX_LATE_MINUTES: ${NUDGEIQ_SEND_MAX_LATE_MINUTES:-120}
+      NUDGEIQ_OUTCOME_SWEEP_GRACE_SECONDS: ${NUDGEIQ_OUTCOME_SWEEP_GRACE_SECONDS:-600}
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:  # the backend creates the tables on start-up; the worker only uses them
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.worker.celery_app inspect ping -d celery@$$HOSTNAME -t 5"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  beat:
+    build: ./backend
+    image: nudgeiq-backend
+    command:
+      - celery
+      - -A
+      - app.worker.celery_app
+      - beat
+      - --loglevel=${NUDGEIQ_LOG_LEVEL:-INFO}
+      - --schedule=/tmp/celerybeat-schedule
+    environment:
+      NUDGEIQ_REDIS_URL: redis://redis:6379/0
+      NUDGEIQ_DISPATCH_INTERVAL_SECONDS: ${NUDGEIQ_DISPATCH_INTERVAL_SECONDS:-30}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    restart: unless-stopped
+
+volumes:
+  nudgeiq_pg:
+  nudgeiq_redis:
