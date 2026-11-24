@@ -27,7 +27,6 @@ services:
 
   backend:
     build: ./backend
-    image: nudgeiq-backend  # the worker below uses this same image, so it is built once
     environment:
       NUDGEIQ_DATABASE_URL: postgresql://nudgeiq:${POSTGRES_PASSWORD:-nudgeiq}@db:5432/nudgeiq
       NUDGEIQ_LLM: ${NUDGEIQ_LLM:-mock}
@@ -79,7 +78,6 @@ services:
     # No published port: only the backend and the worker need Redis.
 
   worker:
-    build: ./backend
     image: nudgeiq-backend
     command:
       - celery
@@ -108,7 +106,6 @@ services:
     restart: unless-stopped
 
   beat:
-    build: ./backend
     image: nudgeiq-backend
     command:
       - celery
