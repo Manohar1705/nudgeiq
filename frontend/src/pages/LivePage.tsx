@@ -18,16 +18,13 @@ const asOf = () => {
 };
 
 async function pickCustomer(): Promise<CustomerState> {
-  let customers = await api.listCustomers(500);
-  if (customers.length === 0) {
-    await api.seedDemo(200, Math.floor(Math.random() * 1000));
-    customers = await api.listCustomers(500);
-  }
+  const customers = await api.listCustomers(500);
+  if (customers.length === 0) throw new Error("No customers yet. Add customers on the Admin tab first.");
   const decided = new Set((await api.listDecisions(500)).map((d) => d.customer_id));
   const usable = customers.filter((c) => !c.is_holdout && c.contactable);
   const fresh = usable.filter((c) => !decided.has(c.customer_id));
   const pool = fresh.length ? fresh : usable;
-  if (pool.length === 0) throw new Error("No contactable customers. Seed more with POST /demo/seed.");
+  if (pool.length === 0) throw new Error("No contactable customers. Add customers on the Admin tab first.");
   return pool[Math.floor(Math.random() * pool.length)];
 }
 

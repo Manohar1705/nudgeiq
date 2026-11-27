@@ -106,8 +106,8 @@ class PostgresRepository:
         """Delete all data (tests and demos only)."""
         with self._lock:
             self._conn.execute(
-                "TRUNCATE rewards, outcomes, decisions, journeys, contacts, customers, policies,"
-                " policy_credits, variants, templates, campaigns, scheduled_sends"
+                "TRUNCATE engine_rewards, outcomes, decisions, journeys, contacts, engine_customers,"
+                " policies, policy_credits, variants, templates, engine_campaigns, scheduled_sends"
             )
 
     def close(self) -> None:
@@ -136,7 +136,7 @@ class PostgresRepository:
             state.preferred_channel.value if state.preferred_channel else None
         )
         self._run(
-            f"""INSERT INTO customers ({_CUSTOMER_COLUMNS})
+            f"""INSERT INTO engine_customers ({_CUSTOMER_COLUMNS})
                 VALUES (%(customer_id)s, %(cohort_id)s, %(cart_value)s, %(abandoned_minutes)s,
                         %(timing_anchor_minutes)s, %(contactable)s, %(dnd)s, %(has_app)s,
                         %(sms_opt_in)s, %(email_opt_in)s, %(preferred_channel)s,
@@ -160,15 +160,34 @@ class PostgresRepository:
 
     def get_customer(self, customer_id: str) -> CustomerState | None:
         row = self._one(
-            f"SELECT {_CUSTOMER_COLUMNS} FROM customers WHERE customer_id = %s", (customer_id,)
+            f"SELECT {_CUSTOMER_COLUMNS} FROM engine_customers WHERE customer_id = %s", (customer_id,)
         )
         return CustomerState.model_validate(row) if row else None
 
     def list_customers(self, limit: int = 100) -> list[CustomerState]:
         rows = self._all(
-            f"SELECT {_CUSTOMER_COLUMNS} FROM customers ORDER BY customer_id LIMIT %s", (limit,)
+            f"SELECT {_CUSTOMER_COLUMNS} FROM engine_customers ORDER BY customer_id LIMIT %s", (limit,)
         )
         return [CustomerState.model_validate(r) for r in rows]
+
+    def sync_admin_customers(self, cohort_id: str) -> int:
+        """Copy the Admin tab's customers (his `customers` table) into `engine_customers`.
+
+        Only customers not copied yet are added, with neutral starting values (empty cart,
+        nothing abandoned). One that is already copied keeps whatever is stored for it.
+        SMS is allowed only when the customer has a phone number.
+        """
+        with self._lock:
+            cur = self._conn.execute(
+                """INSERT INTO engine_customers
+                       (customer_id, cohort_id, cart_value, abandoned_minutes, sms_opt_in)
+                   SELECT id::text, %s::text, 0, 0,
+                          COALESCE(NULLIF(TRIM(phone_number), ''), '') <> ''
+                   FROM customers
+                   ON CONFLICT (customer_id) DO NOTHING""",
+                (cohort_id,),
+            )
+            return cur.rowcount
 
     def record_contact(self, customer_id: str, when: datetime) -> None:
         self._run(
@@ -358,8 +377,15 @@ class PostgresRepository:
         customer_id: str | None = None,
         status: OutcomeStatus | None = None,
     ) -> list[Outcome]:
-        # HACK: disabled for now, since the `outcomes` table doesn't exist in the new schema
-        return []
+        rows = self._all(
+            """SELECT decision_id, customer_id, outcome_type, occurred_at, payload FROM outcomes
+               WHERE (%(did)s::text IS NULL OR decision_id = %(did)s)
+                 AND (%(cid)s::text IS NULL OR customer_id = %(cid)s)
+                 AND (%(st)s::text IS NULL OR status = %(st)s)
+               ORDER BY occurred_at, id""",
+            {"did": decision_id, "cid": customer_id, "st": status},
+        )
+        return [Outcome.model_validate(r) for r in rows]
 
     def list_outcome_records(
         self,
@@ -418,7 +444,7 @@ class PostgresRepository:
 
     def save_reward(self, reward: RewardRecord) -> None:
         self._run(
-            """INSERT INTO rewards (decision_id, customer_id, points, reason)
+            """INSERT INTO engine_rewards (decision_id, customer_id, points, reason)
                VALUES (%(decision_id)s, %(customer_id)s, %(points)s, %(reason)s)
                ON CONFLICT (decision_id) DO UPDATE SET
                    points = EXCLUDED.points, reason = EXCLUDED.reason""",
@@ -427,7 +453,7 @@ class PostgresRepository:
 
     def get_reward(self, decision_id: str) -> RewardRecord | None:
         row = self._one(
-            "SELECT decision_id, customer_id, points, reason FROM rewards WHERE decision_id = %s",
+            "SELECT decision_id, customer_id, points, reason FROM engine_rewards WHERE decision_id = %s",
             (decision_id,),
         )
         return RewardRecord.model_validate(row) if row else None
@@ -586,7 +612,7 @@ class PostgresRepository:
     def save_campaign(self, campaign: Campaign) -> None:
         # name and trigger_event are copies of config fields, kept as columns for easy querying
         self._run(
-            """INSERT INTO campaigns (campaign_id, name, trigger_event, status, version, config,
+            """INSERT INTO engine_campaigns (campaign_id, name, trigger_event, status, version, config,
                                       created_at, updated_at, activated_at, archived_at)
                VALUES (%(campaign_id)s, %(name)s, %(trigger_event)s, %(status)s, %(version)s,
                        %(config)s, %(created_at)s, %(updated_at)s, %(activated_at)s,
@@ -613,12 +639,18 @@ class PostgresRepository:
 
     def get_campaign(self, campaign_id: str) -> Campaign | None:
         row = self._one(
-            f"SELECT {_CAMPAIGN_COLUMNS} FROM campaigns WHERE campaign_id = %s", (campaign_id,)
+            f"SELECT {_CAMPAIGN_COLUMNS} FROM engine_campaigns WHERE campaign_id = %s", (campaign_id,)
         )
         return Campaign.model_validate(row) if row else None
 
     def list_campaigns(self, status: CampaignStatus | None = None) -> list[Campaign]:
-        return []
+        rows = self._all(
+            f"""SELECT {_CAMPAIGN_COLUMNS} FROM engine_campaigns
+                WHERE (%(status)s::text IS NULL OR status = %(status)s)
+                ORDER BY created_at, campaign_id""",
+            {"status": status.value if status else None},
+        )
+        return [Campaign.model_validate(r) for r in rows]
 
     # -------------------------------------------------------------- templates
     def save_template(self, campaign_id: str, template: MessageTemplate) -> None:

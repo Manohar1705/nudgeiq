@@ -22,14 +22,14 @@ services:
     restart: unless-stopped
     # No published port: only the backend needs the database.
     # For psql from your computer, uncomment:
-    # ports:
-    #   - "127.0.0.1:5432:5432"
+    ports:
+      - "127.0.0.1:5433:5432"
 
   backend:
     build: ./backend
     image: nudgeiq-backend
     environment:
-      DATABASE_URL: postgresql://nudgeiq:${POSTGRES_PASSWORD:-nudgeiq}@db:5432/nudgeiq
+      NUDGEIQ_DATABASE_URL: postgresql://nudgeiq:${POSTGRES_PASSWORD:-nudgeiq}@db:5432/nudgeiq
       NUDGEIQ_LLM: ${NUDGEIQ_LLM:-mock}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       NUDGEIQ_GROQ_MODEL: ${NUDGEIQ_GROQ_MODEL:-}
@@ -89,7 +89,7 @@ services:
       - --concurrency=${WORKER_CONCURRENCY:-2}
     environment:
       NUDGEIQ_REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: postgresql://nudgeiq:${POSTGRES_PASSWORD:-nudgeiq}@db:5432/nudgeiq
+      NUDGEIQ_DATABASE_URL: postgresql://nudgeiq:${POSTGRES_PASSWORD:-nudgeiq}@db:5432/nudgeiq
       NUDGEIQ_LOG_LEVEL: ${NUDGEIQ_LOG_LEVEL:-INFO}
       NUDGEIQ_SEND_MAX_LATE_MINUTES: ${NUDGEIQ_SEND_MAX_LATE_MINUTES:-120}
       NUDGEIQ_OUTCOME_SWEEP_GRACE_SECONDS: ${NUDGEIQ_OUTCOME_SWEEP_GRACE_SECONDS:-600}

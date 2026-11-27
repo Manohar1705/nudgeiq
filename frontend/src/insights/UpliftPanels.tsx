@@ -18,7 +18,7 @@ const sliceName = (s: DimSlice) => (s.dimension === "channel" ? CHANNEL_LABELS[s
 /* ---------- Uplift by segment ---------- */
 
 export function SegmentCard() {
-  const { data, loading } = useLoad(loadSlices, "uplift analytics", 0);
+  const { data, loading } = useLoad(loadSlices, "uplift analytics", 0, 10000);
   const top = useMemo(
     () => (data?.rows ?? [])
       .filter((r) => r.uplift !== null)
@@ -76,8 +76,8 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub: 
 }
 
 export function GuardrailsCard() {
-  const win = useLoad(loadWindow, "customers", 0);
-  const g = useLoad(() => api.getGuardrails(), "guardrails", 0);
+  const win = useLoad(loadWindow, "customers", 0, 10000);
+  const g = useLoad(() => api.getGuardrails(), "guardrails", 0, 10000);
   const groups = useMemo(() => (g.data ? normalizeGuardrails(g.data) : null), [g.data]);
 
   // Rate with a comparison to holdout. lowerIsBetter flips which direction counts as good.

@@ -82,7 +82,7 @@ function DistCard({ d, total }: { d: Dist; total: number }) {
 /* ---------- findings, from measured uplift ---------- */
 
 function Findings() {
-  const { data, loading } = useLoad(loadSlices, "uplift analytics", 0);
+  const { data, loading } = useLoad(loadSlices, "uplift analytics", 0, 10000);
   const { significant, total } = useMemo(() => {
     const rows = data?.rows ?? [];
     const significant = rows
@@ -126,7 +126,7 @@ function Findings() {
 /* ---------- view ---------- */
 
 export default function CohortView() {
-  const customers = useLoad(() => api.listCustomers(FETCH_LIMIT), "customers", 0);
+  const customers = useLoad(() => api.listCustomers(FETCH_LIMIT), "customers", 0, 10000);
   const dists = useMemo(() => (customers.data ? buildDistributions(customers.data) : []), [customers.data]);
 
   if (customers.error) return <div className="card"><p className="muted">{customers.error}</p></div>;

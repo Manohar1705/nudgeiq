@@ -62,7 +62,7 @@ function UpliftBars({ rows }: { rows: UpliftSlice[] }) {
 }
 
 function UpliftCard({ dimension, title, refreshKey }: { dimension: UpliftDimension; title: string; refreshKey: number }) {
-  const { data, error, loading } = useLoad(() => api.getUpliftBy(dimension), `${dimension} analytics`, refreshKey);
+  const { data, error, loading } = useLoad(() => api.getUpliftBy(dimension), `${dimension} analytics`, refreshKey, 10000);
   const rows = useMemo(() => (data ? normalizeSlices(data) : []), [data]);
   const sorted = useMemo(() => [...rows].sort((a, b) => (b.uplift ?? -Infinity) - (a.uplift ?? -Infinity)), [rows]);
 
@@ -90,7 +90,7 @@ const COLS: { key: SortKey; label: string; hint: string }[] = [
 ];
 
 function MessageTable({ refreshKey }: { refreshKey: number }) {
-  const { data, error, loading } = useLoad(() => api.getMessageFunnel(), "message funnel", refreshKey);
+  const { data, error, loading } = useLoad(() => api.getMessageFunnel(), "message funnel", refreshKey, 10000);
   const rows = useMemo(() => (data ? normalizeFunnel(data) : []), [data]);
   const [sortKey, setSortKey] = useState<SortKey>("sent");
   const [desc, setDesc] = useState(true);

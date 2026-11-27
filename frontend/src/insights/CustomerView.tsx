@@ -122,7 +122,7 @@ function TrailItem({ item, open }: { item: DecisionDetail; open: boolean }) {
 }
 
 export default function CustomerView() {
-  const customers = useLoad(() => api.listCustomers(500), "customers", 0);
+  const customers = useLoad(() => api.listCustomers(500), "customers", 0, 10000);
   const [picked, setPicked] = useState<string | null>(null);
   const list = customers.data ?? [];
   const id = picked ?? list[0]?.customer_id ?? "";

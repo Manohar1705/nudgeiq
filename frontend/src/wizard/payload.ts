@@ -34,5 +34,8 @@ export function buildDraftConfig(base: UseCaseConfig, d: Draft): UseCaseConfig {
       allowed_weekdays: d.weekdays,
     },
     rewards: { points },
+    brand_id: d.brandId || null,
+    product_id: d.productId || null,
+    promotion_id: d.promotionId || null,
   };
 }

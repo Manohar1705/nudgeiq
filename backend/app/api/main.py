@@ -160,14 +160,14 @@ def create_app(
     # Bad model settings fail here, before the repository is opened or seeded.
     llm_client: LLMClient = llm if llm is not None else llm_from_env()
     if repo is None:
-        repo = PostgresRepository(settings.DATABASE_URL)
+        repo = PostgresRepository(settings.database_url)
     store: Repository = repo
 
     # First start only: an empty repository gets the JSON use case as its active campaign.
     # A repository that already has campaigns is never touched, so this cannot undo edits or
     # create a second active campaign.
-    # if not store.list_campaigns():
-    #     seed_campaign(store, use_case_id)
+    if not store.list_campaigns():
+        seed_campaign(store, use_case_id)
 
     # 8d-3b step 3c. None = read NUDGEIQ_ASYNC_OUTCOMES. An explicit value is for tests and skips
     # the PostgreSQL check below (the caller says there is no real worker to share a database).
@@ -261,31 +261,40 @@ def create_app(
         }
 
     # ---- campaigns: reading is here; create, edit, activate etc. are in app/api/campaigns.py
-    # @app.get("/campaigns", response_model=list[CampaignSummary])
-    # def campaigns() -> list[CampaignSummary]:
-    #     return [CampaignSummary.of(c) for c in service.list_campaigns()]
+    @app.get("/campaigns", response_model=list[CampaignSummary])
+    def campaigns() -> list[CampaignSummary]:
+        return [CampaignSummary.of(c) for c in service.list_campaigns()]
 
-    # @app.get("/campaigns/{uid}", response_model=UseCaseConfig)
-    # def campaign(uid: str) -> UseCaseConfig:
-    #     return service.get(uid).config  # unknown id -> 404 via the handler above
+    @app.get("/campaigns/{uid}", response_model=UseCaseConfig)
+    def campaign(uid: str) -> UseCaseConfig:
+        return service.get(uid).config  # unknown id -> 404 via the handler above
 
-    # # ---- customers (stand-in for the real customer source)
-    # @app.post("/customers", response_model=CustomerState)
-    # def upsert_customer(customer: CustomerState) -> CustomerState:
-    #     store.save_customer(customer)
-    #     store.flush()
-    #     return customer
+    # ---- customers: the Admin tab's customers, copied into the engine's own table
+    def _sync_admin_customers() -> None:
+        """Copy new Admin customers into engine_customers (they start in the first cohort)."""
+        sync = getattr(store, "sync_admin_customers", None)
+        if sync is None:  # the in-memory repository used by tests has no Admin table
+            return
+        sync(runtime.current().config.cohorts[0].cohort_id)
 
-    # @app.get("/customers", response_model=list[CustomerState])
-    # def customers(limit: int = 50) -> list[CustomerState]:
-    #     return store.list_customers(limit=max(1, min(limit, 500)))
+    @app.post("/customers", response_model=CustomerState)
+    def upsert_engine_customer(customer: CustomerState) -> CustomerState:
+        store.save_customer(customer)
+        store.flush()
+        return customer
 
-    # @app.get("/customers/{customer_id}", response_model=CustomerState)
-    # def customer(customer_id: str) -> CustomerState:
-    #     found = store.get_customer(customer_id)
-    #     if found is None:
-    #         raise HTTPException(404, f"customer not found: {customer_id}")
-    #     return found
+    @app.get("/customers", response_model=list[CustomerState])
+    def list_engine_customers(limit: int = 50) -> list[CustomerState]:
+        _sync_admin_customers()
+        return store.list_customers(limit=max(1, min(limit, 500)))
+
+    @app.get("/customers/{customer_id}", response_model=CustomerState)
+    def get_engine_customer(customer_id: str) -> CustomerState:
+        _sync_admin_customers()
+        found = store.get_customer(customer_id)
+        if found is None:
+            raise HTTPException(404, f"customer not found: {customer_id}")
+        return found
 
     # @app.post("/demo/seed")
     # def seed(req: SeedRequest) -> dict[str, Any]:
@@ -296,6 +305,62 @@ def create_app(
     #     return {"created": len(people), "first_id": people[0].customer_id}
 
     # ---- the flows
+    @app.post("/events", response_model=Decision)
+    def events(event: TriggerEvent) -> Decision:
+        _sync_admin_customers()  # copy a customer just added on the Admin tab
+        try:
+            decision = runtime.current().handle_event(event)
+        except InvalidEventError as exc:
+            raise HTTPException(422, str(exc)) from None
+        store.flush()
+        return decision
+
+    @app.post("/decide", response_model=Decision)
+    def decide(req: DecideRequest) -> Decision:
+        _sync_admin_customers()
+        decision = runtime.current().decide(req.customer_id, req.as_of)
+        store.flush()
+        return decision
+
+    @app.post("/outcomes", response_model=OutcomeResult | OutcomeAccepted)
+    def outcomes(
+        outcome: Outcome,
+        response: Response,
+        idempotency_key: str | None = Header(default=None, max_length=200),
+    ) -> OutcomeResult | OutcomeAccepted:
+        """Immediate mode (default): reward, learning and journey are done before the answer.
+        Background mode (NUDGEIQ_ASYNC_OUTCOMES on): the outcome is stored as 'pending', a worker
+        is asked to process it, and the answer is 202. Send an `Idempotency-Key` header so a
+        retried request is stored once."""
+        try:
+            # the campaign that made the decision handles its outcome, even after a swap
+            orch = runtime.orchestrator_for_decision(outcome.decision_id)
+            if not async_outcomes:
+                result = orch.record_outcome(outcome)
+                store.flush()
+                return result
+            saved = orch.accept_outcome(outcome, idempotency_key)
+        except DecisionNotFoundError as exc:
+            raise HTTPException(404, f"decision not found: {exc}") from None
+        except OutcomeMismatchError as exc:
+            raise HTTPException(422, str(exc)) from None
+        except OutcomeKeyConflict as exc:
+            raise HTTPException(409, str(exc)) from None
+        store.flush()
+        record = saved.record
+        queued = False
+        if record.status == "pending":  # also for a repeated key: the first queueing may be lost
+            from app.worker import tasks  # only needed (and imported) in background mode
+
+            queued = tasks.enqueue_outcome(record.outcome_id)
+        response.status_code = 202
+        return OutcomeAccepted(
+            outcome_id=record.outcome_id,
+            decision_id=outcome.decision_id,
+            status=record.status,
+            queued=queued,
+            duplicate=not saved.created,
+        )
 
     # ---- reading results
     @app.get("/decisions", response_model=list[Decision])

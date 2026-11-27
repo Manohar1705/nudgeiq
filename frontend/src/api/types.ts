@@ -116,6 +116,9 @@ export interface UseCaseConfig {
     variant_epsilon?: number;
     variant_min_resolved?: number;
   };
+  brand_id?: string | null;
+  product_id?: string | null;
+  promotion_id?: string | null;
 }
 
 export interface CampaignSummary {

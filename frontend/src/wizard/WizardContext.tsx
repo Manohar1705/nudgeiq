@@ -20,6 +20,9 @@ export interface Draft {
   templateChannel: Channel | null;
   variants: MessageVariant[]; // the chosen template's variants, as stored on the draft campaign
   generation: GenerationResult | null; // result of the last "generate" call
+  brandId: string; // "" = none chosen; ids come from the Admin tab
+  productId: string;
+  promotionId: string;
 }
 
 interface WizardValue {
@@ -58,6 +61,9 @@ export function draftFromConfig(cfg: UseCaseConfig): Draft {
     templateChannel: null,
     variants: [],
     generation: null,
+    brandId: cfg.brand_id ?? "",
+    productId: cfg.product_id ?? "",
+    promotionId: cfg.promotion_id ?? "",
   };
 }
 
@@ -100,9 +106,11 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     if (draftId) return Promise.resolve(draftId);
     if (!config) return Promise.reject(new Error("The campaign is not loaded yet."));
     if (!pending.current) {
-      const newId = `${config.use_case_id}_draft_${Date.now().toString(36)}`;
+      const baseId = config.use_case_id.replace(/_draft_.*$/, "");
+      const baseName = config.name.replace(/(\s*\(draft\))+$/, "");
+      const newId = `${baseId}_draft_${Date.now().toString(36)}`;
       pending.current = api
-        .cloneCampaign(config.use_case_id, newId, `${config.name} (draft)`)
+        .cloneCampaign(config.use_case_id, newId, `${baseName} (draft)`)
         .then((detail) => {
           setDraftId(detail.campaign.campaign_id);
           setDraftConfig(detail.campaign.config);

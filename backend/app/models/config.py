@@ -120,6 +120,11 @@ class UseCaseConfig(BaseModel):
     guardrails: Guardrails
     learning: LearningConfig = Field(default_factory=LearningConfig)
 
+    # Business links (ids from the Admin tab). Optional, so older campaigns still load.
+    brand_id: str | None = None
+    product_id: str | None = None
+    promotion_id: str | None = None
+
     @property
     def active_signals(self) -> list[str]:
         return [s.signal_id for s in self.context_signals if s.enabled]
